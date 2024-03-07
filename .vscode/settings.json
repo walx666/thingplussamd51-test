@@ -1,0 +1,24 @@
+{
+    "platformio-ide.reopenSerialMonitorDelay": 0,
+    "[c]": {
+        //"files.encoding": "windows1252",
+        "editor.tabSize": 2,
+        "editor.formatOnSave": false,
+        "editor.formatOnPaste": false
+    },
+    "[cpp]": {
+        //"files.encoding": "windows1252",
+        "editor.tabSize": 2,
+        "editor.formatOnSave": false,
+        "editor.formatOnPaste": false
+    },
+    "terminal.integrated.allowChords": false,
+    "C_Cpp.errorSquiggles": "disabled",
+    "cmake.configureOnOpen": false,
+    "git-graph.fileEncoding": "windows1252",
+    "files.associations": {
+        "wiring_private.h": "c",
+        "printable.h": "c"
+    },
+    "powershell.integratedConsole.showOnStartup": false
+}
