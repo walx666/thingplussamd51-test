@@ -26,6 +26,7 @@ muTimer TimerSensor1 = muTimer();
 #ifdef USE_I2C_EEPROM
 #include "SparkFun_External_EEPROM.h" // Click here to get the library: http://librarymanager/All#SparkFun_External_EEPROM
 ExternalEEPROM myMem;
+uint8_t EEPROM_ADDRESS = 0xA0; //0b1010(A2 A1 A0): A standard I2C EEPROM with the ADR0 bit set to VCC
 #endif /* #ifdef USE_I2C_EEPROM */
 
 void loopSensor();
@@ -61,7 +62,9 @@ void setup() {
   UsedSerial.println("Qwiic EEPROM example");
   Wire.begin();
 
-  if (myMem.begin() == false)
+  myMem.setMemoryType(2048); // Valid types: 0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1025, 2048
+
+  if (myMem.begin(EEPROM_ADDRESS,Wire) == false)
   {
     UsedSerial.println("No memory detected. Freezing.");
     while (1)
@@ -71,11 +74,11 @@ void setup() {
 
   //Write a series of bytes then test to see if auto-detect changes them
   //The detection functions *should not* modify the data on the EEPROM
-  int maxBytes = 300; //Ideally we write this many bytes
+  uint32_t maxBytes = 300; //Ideally we write this many bytes
   if (maxBytes > myMem.getMemorySizeBytes())
     maxBytes = myMem.getMemorySizeBytes();
 
-  for (int x = 0 ; x < maxBytes ; x++)
+  for (uint32_t x = 0 ; x < maxBytes ; x++)
     myMem.write(x, (uint8_t)('0' + x));
 
   //  UsedSerial.print("Detected number of address bytes: ");
@@ -114,7 +117,7 @@ void setup() {
 
   UsedSerial.print("Checking memory: ");
   bool allTestsPassed = true;
-  for (int x = 0 ; x < maxBytes ; x++)
+  for (uint32_t x = 0 ; x < maxBytes ; x++)
   {
     byte readValue = myMem.read(x);
     if (readValue != (uint8_t)('0' + x))
