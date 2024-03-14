@@ -33,31 +33,35 @@ uint8_t eepadr=EEPADR_A0;
 
  #ifdef UseSPIFlash
 #include "SparkFun_SPI_SerialFlash.h" //Click here to get the library: http://librarymanager/All#SparkFun_SPI_SerialFlash
-#if defined(ARDUINO_ARCH_SAMD)
- #if defined(ARDUINO_SAMD51_MICROMOD)
+ #if defined(ARDUINO_ARCH_SAMD) && defined(ARDUINO_SAMD51_MICROMOD)
 #define FLASH_SPI       SPI1
 #define PIN_FLASH_CS    SS1
 #define PIN_FLASH_WP    15
 #define PIN_FLASH_HOLD  16
- #elif  defined(ARDUINO_SAMD51_THING_PLUS)
+ #endif
+ #if defined(ARDUINO_ARCH_SAMD) && defined(ARDUINO_SAMD51_THING_PLUS)
 #define FLASH_SPI       SPI1
 #define PIN_FLASH_CS    FLASH_SS
- #elif defined (EXTERNAL_FLASH_USE_SPI) && defined (EXTERNAL_FLASH_USE_CS) 
+ #endif
+ #if defined(ARDUINO_ARCH_SAMD) && defined(ARDUINO_SAMD_MKRWAN1310)
+#define FLASH_SPI       SPI1
+#define PIN_FLASH_CS    FLASH_CS
+ #endif
+
+ #if defined(ARDUINO_ARCH_SAMD) && defined(EXTERNAL_FLASH_USE_SPI) && defined(EXTERNAL_FLASH_USE_CS)
 #define FLASH_SPI       EXTERNAL_FLASH_USE_SPI  /* SPI1 */
 #define PIN_FLASH_CS    EXTERNAL_FLASH_USE_CS
- #else
-#error !!! Unsupportet Board !!! Please define FLASH_SPI and PIN_FLASH_CS
-#endif
- #elif defined(ARDUINO_ARCH_STM32)
-  #if defined(ARDUINO_SPARKFUN_MICROMOD_F405)
+ #endif
+ #if defined(ARDUINO_ARCH_STM32) && defined(ARDUINO_SPARKFUN_MICROMOD_F405)
 SPIClass SPIF(FLASH_SDI,FLASH_SDO,FLASH_SCK,FLASH_CS);
 //SPIClass SPIF(FLASH_SDO,FLASH_SDI,FLASH_SCK,FLASH_CS);
-#define FLASH_SPI       SPI
+#define FLASH_SPI       SPIF
 #define PIN_FLASH_CS    FLASH_CS /* SS1 */
-  #else
-#error !!! Unsupportet Board !!! Please define FLASH_SPI and PIN_FLASH_CS
-  #endif
  #endif
+ #if !defined(FLASH_SPI) || !defined(PIN_FLASH_CS)
+#error !!! Unsupportet Board !!! Please define FLASH_SPI and PIN_FLASH_CS
+ #endif
+
 //void DetectSPIFlash (Stream & mydev = UsedSerial);
 void DetectSPIFlash (Stream & mydev, SPIClass spi);
  #endif
