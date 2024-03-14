@@ -1,4 +1,4 @@
-#define UseScheduler 1
+#define UseEEPI2C
 
 #define STRINGIFY_(x) #x
 #define STRINGIFY(x) STRINGIFY_(x)

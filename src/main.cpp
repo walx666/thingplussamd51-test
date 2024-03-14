@@ -1,248 +1,269 @@
 #include "config.h"
 #include "io.h"
 
+//#define UseScheduler
+#define UseSPIFlash
+
 #include <Arduino.h>
 #include <stdarg.h>
 #include <Wire.h>
-#if UseScheduler
+#ifdef UseScheduler
 #include <Scheduler.h>
 #endif
 #include <muTimer.h>
 muTimer TimerLed1 = muTimer();
 muTimer TimerSensor1 = muTimer();
 
-
 #include "sys.h"
 
 #define UsedSerial Serial   /* USB */
 //#define UsedSerial Serial1  /* Default Uart */
 
-//#include "I2C_eeprom.h"
-//I2C_eeprom ee(0x50, I2C_DEVICESIZE_24LC512);
-//bool EEPTestOk = false;
-
-#define USE_I2C_EEPROM
-
-#ifdef USE_I2C_EEPROM
+#ifdef UseEEPI2C
+#define EEPADR_A0 0x50   //0b1010(A2 A1 A0): A standard I2C EEPROM with the ADR0 bit set to VCC
+#define EEPADR_A8 0x54   //0b1010(A2 A1 A0): A standard I2C EEPROM with the ADR0 bit set to VCC
 #include "SparkFun_External_EEPROM.h" // Click here to get the library: http://librarymanager/All#SparkFun_External_EEPROM
 ExternalEEPROM myMem;
-uint8_t EEPROM_ADDRESS = 0xA0; //0b1010(A2 A1 A0): A standard I2C EEPROM with the ADR0 bit set to VCC
-#endif /* #ifdef USE_I2C_EEPROM */
+uint8_t eepadr=EEPADR_A0;
+#endif /* #ifdef UseEEPI2C */
 
-void loopSensor();
-void loopHandleUart1();
+#define TWI_CLOCK_100KHZ  100000
+#define TWI_CLOCK_400KHZ  400000
+#define TWI_CLOCK_1MHZ    1000000
+
+ #ifdef UseSPIFlash
+#include "SparkFun_SPI_SerialFlash.h" //Click here to get the library: http://librarymanager/All#SparkFun_SPI_SerialFlash
+#if defined(ARDUINO_ARCH_SAMD)
+ #if defined(ARDUINO_SAMD51_MICROMOD)
+#define FLASH_SPI       SPI1
+#define PIN_FLASH_CS    SS1
+#define PIN_FLASH_WP    15
+#define PIN_FLASH_HOLD  16
+ #elif  defined(ARDUINO_SAMD51_THING_PLUS)
+#define FLASH_SPI       SPI1
+#define PIN_FLASH_CS    FLASH_SS
+ #elif defined (EXTERNAL_FLASH_USE_SPI) && defined (EXTERNAL_FLASH_USE_CS) 
+#define FLASH_SPI       EXTERNAL_FLASH_USE_SPI  /* SPI1 */
+#define PIN_FLASH_CS    EXTERNAL_FLASH_USE_CS
+ #else
+#error !!! Unsupportet Board !!! Please define FLASH_SPI and PIN_FLASH_CS
+#endif
+ #elif defined(ARDUINO_ARCH_STM32)
+  #if defined(ARDUINO_SPARKFUN_MICROMOD_F405)
+SPIClass SPIF(FLASH_SDI,FLASH_SDO,FLASH_SCK,FLASH_CS);
+//SPIClass SPIF(FLASH_SDO,FLASH_SDI,FLASH_SCK,FLASH_CS);
+#define FLASH_SPI       SPI
+#define PIN_FLASH_CS    FLASH_CS /* SS1 */
+  #else
+#error !!! Unsupportet Board !!! Please define FLASH_SPI and PIN_FLASH_CS
+  #endif
+ #endif
+//void DetectSPIFlash (Stream & mydev = UsedSerial);
+void DetectSPIFlash (Stream & mydev, SPIClass spi);
+ #endif
+
+void loopHandleLED();
+//void ShowInfo (Stream & mydev = UsedSerial);
+void ShowInfo (Stream & mydev, const char *prestr=nullptr, const char *poststr=nullptr);
+
+bool BlinkLED=false;
 
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH);
-/*
-  pinMode(MODULE_WAKEUP, OUTPUT);
-  digitalWrite(MODULE_WAKEUP, LOW);
 
-  pinMode(MODULE_RESET, OUTPUT);
-  digitalWrite(MODULE_RESET, HIGH);
-*/
-  /*ee.begin();
-  EEPTestOk = ee.isConnected();
-  if (!EEPTestOk) {
-    USB_VBUS_ChkDisable = true;
-    Serial1.println("\r\n>ERROR! : EEPROM cannot be found!");
-    //while (1);
-  }*/
- #if UseScheduler
-  //Scheduler.startLoop(loopSensor);
+ #ifdef UseScheduler
+  Scheduler.startLoop(loopHandleLED);
  #endif
 
   UsedSerial.begin(115200);
-  while(!Serial) {
+  while(!UsedSerial) {
     delay(50);
   } 
 
- #ifdef USE_I2C_EEPROM
-  UsedSerial.println("Qwiic EEPROM example");
-  Wire.begin();
+  BlinkLED=true;
+  ShowInfo(UsedSerial,"\r\n>BOOT!\t");
 
-  myMem.setMemoryType(2048); // Valid types: 0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1025, 2048
-
-  if (myMem.begin(EEPROM_ADDRESS,Wire) == false)
-  {
-    UsedSerial.println("No memory detected. Freezing.");
-    while (1)
-      ;
-  }
-  UsedSerial.println("Memory detected!");
-
-  //Write a series of bytes then test to see if auto-detect changes them
-  //The detection functions *should not* modify the data on the EEPROM
-  uint32_t maxBytes = 300; //Ideally we write this many bytes
-  if (maxBytes > myMem.getMemorySizeBytes())
-    maxBytes = myMem.getMemorySizeBytes();
-
-  for (uint32_t x = 0 ; x < maxBytes ; x++)
-    myMem.write(x, (uint8_t)('0' + x));
-
-  //  UsedSerial.print("Detected number of address bytes: ");
-  //UsedSerial.println(myMem.detectAddressBytes());
-
-  UsedSerial.print("Detected pageSizeBytes: ");
-  UsedSerial.println(myMem.detectPageSizeBytes());
-
-  //  UsedSerial.print("Detected page write time (ms): ");
-  //  UsedSerial.println(myMem.detectWriteTimeMs());
-
-  //uint32_t eepromSizeBytes = myMem.detectMemorySizeBytes();
-  uint32_t eepromSizeBytes = myMem.getMemorySizeBytes();
-  UsedSerial.print("Detected EEPROM size (bytes): ");
-  UsedSerial.print(eepromSizeBytes);
-  UsedSerial.print(" bytes / ");
-  if (eepromSizeBytes < 128)
-  {
-    UsedSerial.print(eepromSizeBytes * 8);
-    UsedSerial.print(" Bits");
-  }
-  else
-  {
-    UsedSerial.print(eepromSizeBytes * 8 / 1024);
-    UsedSerial.print(" kBits");
-  }
-  UsedSerial.print(" - 24XX");
-  if (eepromSizeBytes == 16)
-    UsedSerial.print("00");
-  else
-  {
-    if ((eepromSizeBytes * 8 / 1024) < 10) UsedSerial.print("0");
-    UsedSerial.print(eepromSizeBytes * 8 / 1024);
-  }
-  UsedSerial.println();
-
-  UsedSerial.print("Checking memory: ");
-  bool allTestsPassed = true;
-  for (uint32_t x = 0 ; x < maxBytes ; x++)
-  {
-    byte readValue = myMem.read(x);
-    if (readValue != (uint8_t)('0' + x))
-    {
-      UsedSerial.print("Error detected in location: ");
-      UsedSerial.print(x);
-      allTestsPassed = false;
-      break;
-    }
-  }
-
-  if (allTestsPassed == true)
-    UsedSerial.print("Good");
-  UsedSerial.println();
-
-  //Do basic read/write tests
-  byte myValue1 = 200;
-  myMem.write(0, myValue1); //(location, data)
-
-  byte myRead1 = myMem.read(0);
-  UsedSerial.print("I read (should be 200): ");
-  UsedSerial.println(myRead1);
-
-  int myValue2 = -366;
-  myMem.put(10, myValue2); //(location, data)
-  int myRead2;
-  myMem.get(10, myRead2); //location to read, thing to put data into
-  UsedSerial.print("I read (should be -366): ");
-  UsedSerial.println(myRead2);
-
-  if (myMem.getMemorySizeBytes() > 16)
-  {
-    float myValue3 = -7.35;
-    myMem.put(20, myValue3); //(location, data)
-    float myRead3;
-    myMem.get(20, myRead3); //location to read, thing to put data into
-    UsedSerial.print("I read (should be -7.35): ");
-    UsedSerial.println(myRead3);
-
-    String myString = "Hi, I am just a simple test string"; //34 characters
-    unsigned long nextEEPROMLocation = myMem.putString(70, myString);
-
-    String myRead4 = "";
-    myMem.getString(70, myRead4);
-    UsedSerial.print("I read: ");
-    UsedSerial.println(myRead4);
-    UsedSerial.print("Next available EEPROM location: ");
-    UsedSerial.println(nextEEPROMLocation);
-  }
- #endif /*  #ifdef USE_I2C_EEPROM */
- #if UseScheduler
-  //Scheduler.startLoop(loopHandleUart1);
+ #ifdef UseScheduler
+  Scheduler.startLoop(loopHandleLED);
  #endif
+
+ #ifdef UseSPIFlash
+  DetectSPIFlash(UsedSerial,FLASH_SPI);
+ #endif
+
+  Wire.begin();
+  Wire.setClock(TWI_CLOCK_1MHZ);
 }
 
- #if UseScheduler
-void loopHandleUart1() {
-  yield();
+ #ifdef UseScheduler
+void loopHandleLED() {
+  if (BlinkLED)
+    digitalWrite(LED_BUILTIN, TimerLed1.cycleOnOff(100, 500));
+  else
+    digitalWrite(LED_BUILTIN, true);
+}
  #else
 void yield() {
-  /* digitalWrite(LED_BUILTIN, TimerLed1.cycleOnOff(100, 500)); */
- #endif
-  if (UsedSerial.available() > 0) {
-    uint8_t rxdata = UsedSerial.read();
-    prntf(Serial, " %02x", rxdata);
-  }
+  if (BlinkLED)
+    digitalWrite(LED_BUILTIN, TimerLed1.cycleOnOff(100, 500));
+  else
+    digitalWrite(LED_BUILTIN, true);
 }
-
-
-void loopSensor(void) {
-  static bool StateLED=HIGH;
-  //digitalWrite(LED_BUILTIN, TimerLed1.cycleOnOff(100, 500));
-
-  if (TimerSensor1.cycleTrigger(1000)) {
-    digitalWrite(LED_BUILTIN, StateLED);
-    if (StateLED==HIGH)
-      StateLED=LOW;
-    else  
-      StateLED=HIGH;
-  }
- #if UseScheduler
-  delay(500);
-  yield();
  #endif
-}
 
 
 void loop() {
-  uint8_t seru_rxdata;
+#ifdef UseEEPI2C
+  if (eepadr) {
+    myMem.setMemoryType(2048); // Valid types: 0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1025, 2048
+    UsedSerial.println("I2C-EEPROM Test");
+    while (1) {
+      if (myMem.begin(eepadr) == true) {
+        break;
+      }
+      prntf(UsedSerial,"No memory @ %02X detected !\r\n", (eepadr<<1));
+      delay(1000);
 
-  if (UsedSerial.available() > 0) {
-    seru_rxdata = UsedSerial.read();
-    //prntf(UsedSerial, "%c", seru_rxdata);
+      if (eepadr==EEPADR_A0)
+        eepadr=EEPADR_A8;
+      else
+        eepadr=EEPADR_A0;
 
-    switch (seru_rxdata) {
-      /*case 'i':
-        prntf(UsedSerial, "\r\n%c:UsedSerial",seru_rxdata);
-      break;*/
+      yield();
+    }
+    prntf(UsedSerial,"Memory detected @ %02X !\r\n", (eepadr<<1));
+
+    //Write a series of bytes then test to see if auto-detect changes them
+    //The detection functions *should not* modify the data on the EEPROM
+    uint32_t maxBytes = 300; //Ideally we write this many bytes
+    if (maxBytes > myMem.getMemorySizeBytes())
+      maxBytes = myMem.getMemorySizeBytes();
+   
+    //UsedSerial.print("Detected number of address bytes: ");
+    //UsedSerial.println(myMem.detectAddressBytes());
+   
+    prntf(UsedSerial, "Detected pageSizeBytes: %d\r\n",myMem.detectPageSizeBytes());
+   
+    //UsedSerial.print("Detected page write time (ms): ");
+    //UsedSerial.println(myMem.detectWriteTimeMs());
+   
+    //uint32_t eepromSizeBytes = myMem.detectMemorySizeBytes();
+    uint32_t eepromSizeBytes = myMem.getMemorySizeBytes();
+    prntf(UsedSerial,"Detected EEPROM size (bytes): %d bytes / ",eepromSizeBytes);
+   
+    if (eepromSizeBytes < 128)
+      prntf(UsedSerial,"%02d Bits", eepromSizeBytes * 8);
+    else
+      prntf(UsedSerial,"%02d kBits",(eepromSizeBytes * 8 / 1024));
+    
+    prntf(UsedSerial," - 24XX%02d\r\n",(eepromSizeBytes * 8 / 1024));
+  }
+ #endif /* #ifdef UseEEPI2C */
+   
+  if (eepadr)
+    prntf(UsedSerial,"\r\nPress 'c' to continue...");
+
+  while (UsedSerial.available()==0) {
+    delay(10);
+    yield();
+  };
+  
+  if (UsedSerial.available()>0)
+  {
+    uint8_t rxdata = UsedSerial.read();
+    eepadr=0;
+
+    switch (rxdata) {
       case 'i' : {
-      } break;
-      case 'I': {
-      } break;
-      //
-      case 'S' : {
+        ShowInfo(UsedSerial,"\r\n");
       } break;
       //
       case 'r' : {
-        prntf(UsedSerial,"\r\nReset: ok");
+        UsedSerial.print("\r\nRESET!\r\n");
+        delay(100);
+        NVIC_SystemReset();
       } break;
-      case 'R': {
-      } break;
-      case 'w' : {
-        /*digitalWrite(MODULE_WAKEUP, LOW);
-        delay(5);
-        digitalWrite(MODULE_WAKEUP, HIGH); */
+      //
+      case 'c' : {
+        eepadr=EEPADR_A0;
+        prntf(UsedSerial,"\t->\r\n");
       } break;
       default: {
-        prntf(UsedSerial, "\r\n%c", seru_rxdata);
+       #if 0
+        if ((rxdata >= ' ') && (rxdata <= 'z'))
+          prntf(UsedSerial, "\r\n%c", rxdata);
+        else
+          prntf(UsedSerial, "\r\n0x%02x", rxdata);
+       #endif
       } break;
     }
   }
- #if UseScheduler
-  delay(100);
+}
+
+void ShowInfo (Stream & mydev, const char *prestr, const char *poststr) {
+ #if 1
+  if (prestr!=nullptr)
+    mydev.print(prestr);
+
+  prntf(mydev,"V" FWVERSION_EXT_STR "\t(%s",GetDeviceNameStringbyDID());
+  #if defined(ARDUINO_ARCH_SAMD)
+  prntf(mydev," Rev:%c",'A'+DSU->DID.bit.REVISION);
+   #if defined(UID_W0)
+  prntf(mydev," ID=%s",GetUIDString());
+   #endif
+  #endif
+  prntf(mydev,")\r\n");
+
+  if (poststr!=nullptr)
+    mydev.print(poststr);
  #else
-  loopSensor();
+  mydev.print("Info=\t\t");
+  mydev.print(GetDeviceNameStringbyDID());
+  #if defined(__SAMD51__)
+  mydev.print(" Rev:");
+  mydev.write('A'+DSU->DID.bit.REVISION);
+  #endif
+  mydev.println();
+  #if defined(UID_W0)
+  mydev.print("ID=\t\t");
+  mydev.print(GetUIDString());
+  #endif
+  mydev.println("\r\nFirmware =\tV" FWVERSION_EXT_STR);
  #endif
 }
 
+
+ #ifdef UseSPIFlash
+void DetectSPIFlash (Stream & mydev, SPIClass spi)
+{
+  SFE_SPI_FLASH myFlash;
+
+ #ifdef PIN_FLASH_WP
+  pinMode(PIN_FLASH_WP, OUTPUT);
+  digitalWrite(PIN_FLASH_WP, HIGH);
+ #endif
+ #ifdef PIN_FLASH_HOLD
+  pinMode(PIN_FLASH_HOLD, OUTPUT);
+  digitalWrite(PIN_FLASH_HOLD, HIGH);
+ #endif
+
+  //myFlash.enableDebugging(); // Uncomment this line to enable helpful debug messages on Serial
+
+  // Begin the flash using the chosen CS pin. Default to: spiPortSpeed=2000000, spiPort=SPI and spiMode=SPI_MODE0
+  if (myFlash.begin(PIN_FLASH_CS,2000000U,spi,SPI_MODE0) == false) {
+    mydev.println("SPI Flash not detected!");
+  }
+  else {
+    sfe_flash_manufacturer_e mfgID = myFlash.getManufacturerID();
+    if (mfgID != SFE_FLASH_MFG_UNKNOWN) {
+      prntf(mydev,"SPI Flash: %s (0x%02X)",myFlash.manufacturerIDString(mfgID), myFlash.getRawManufacturerID());
+    }
+    else {
+      uint8_t unknownID = myFlash.getRawManufacturerID(); // Read the raw manufacturer ID
+      prntf(mydev,"SPI Flash: Unknown manufacturer ID: 0x%02X",unknownID);
+    }
+    prntf(mydev, "\tDevice ID: 0x%04X\r\n",myFlash.getDeviceID());
+  }
+}
+#endif /* #ifdef UseSPIFlash */

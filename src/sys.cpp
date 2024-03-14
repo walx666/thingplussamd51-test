@@ -154,122 +154,113 @@ int8_t delayMicrosWithStreamBreak(unsigned int us, Stream &mydev, char breakchr)
 char *GetUIDString(void)
 {
   static char str[33] = {0};
-  sprintf(str, "%08X%08X%08X%08X", *UID_W0, *UID_W1, *UID_W2, *UID_W3);
+  //sprintf(str, "%08X%08X%08X%08X", *UID_W0, *UID_W1, *UID_W2, *UID_W3);
   return str;
 }
 
 uint32_t *GetUIDtoArray(uint32_t *CpuID)
 {
+ #ifdef UID_W0
   CpuID[0] = *UID_W0;
   CpuID[1] = *UID_W1;
   CpuID[2] = *UID_W2;
   CpuID[3] = *UID_W3;
+ #endif
   return CpuID;
 }
 
 uint32_t *GetUID()
 {
-  static uint32_t CpuID[4];
+  static uint32_t CpuID[4] = {0};
+ #ifdef UID_W0
   CpuID[0] = *UID_W0;
   CpuID[1] = *UID_W1;
   CpuID[2] = *UID_W2;
   CpuID[3] = *UID_W3;
+ #endif
   return CpuID;
 }
 
 char *GetDeviceNameStringbyDID(void)
 {
-  static char str[20];
+  static char str[32];
+  uint32_t did;
   strcpy(str, "???");
-#ifdef ARDUINO_ARCH_SAMD
-  switch (DSU->DID.reg)
+ #ifdef ARDUINO_ARCH_SAMD
+  did=DSU->DID.reg;
+  #ifdef __SAMD51__
+  switch (did)
   {
-  case 0x61810306:
-    strcpy(str, "ATSAME51G18A");
-    break;
-  case 0x61810305:
-    strcpy(str, "ATSAME51G19A");
-    break;
+    case 0x61810306 : strcpy(str, "ATSAME51G18A");        break;
+    case 0x61810305 : strcpy(str, "ATSAME51G19A");        break;
   }
-  switch (DSU->DID.reg & 0xfffff0ff)
+  switch (did & 0xfffff0ff)
   {
-  case 0x61840001:
-    strcpy(str, "ATSAME54P19A");
-    break;
-  case 0x61840000:
-    strcpy(str, "ATSAME54P20A");
-    break;
-  case 0x61840003:
-    strcpy(str, "ATSAME54N19A");
-    break;
-  case 0x61840002:
-    strcpy(str, "ATSAME54N20A");
-    break;
-  case 0x61830002:
-    strcpy(str, "ATSAME53N20A");
-    break;
-  case 0x61830003:
-    strcpy(str, "ATSAME53N19A");
-    break;
-  case 0x61830006:
-    strcpy(str, "ATSAME53J18A");
-    break;
-  case 0x61830005:
-    strcpy(str, "ATSAME53J19A");
-    break;
-  case 0x61830004:
-    strcpy(str, "ATSAME53J20A");
-    break;
-  case 0x61810001:
-    strcpy(str, "ATSAME51N19A");
-    break;
-  case 0x61810000:
-    strcpy(str, "ATSAME51N20A");
-    break;
-  case 0x61810003:
-    strcpy(str, "ATSAME51J18A");
-    break;
-  case 0x61810002:
-    strcpy(str, "ATSAME51J19A");
-    break;
-  case 0x61810004:
-    strcpy(str, "ATSAME51J20A");
-    break;
-  case 0x60060000:
-    strcpy(str, "ATSAMD51P20A");
-    break;
-  case 0x60060001:
-    strcpy(str, "ATSAMD51P19A");
-    break;
-  case 0x60060003:
-    strcpy(str, "ATSAMD51N19A");
-    break;
-  case 0x60060002:
-    strcpy(str, "ATSAMD51N20A");
-    break;
-  case 0x60060006:
-    strcpy(str, "ATSAMD51J18A");
-    break;
-  case 0x60060005:
-    strcpy(str, "ATSAMD51J19A");
-    break;
-  case 0x60060004:
-    strcpy(str, "ATSAMD51J20A");
-    break;
-  case 0x60060008:
-    strcpy(str, "ATSAMD51G18A");
-    break;
-  case 0x60060007:
-    strcpy(str, "ATSAMD51G19A");
-    break;
-  case 0x61810306:
-    strcpy(str, "ATSAME51G18A");
-    break;
-  case 0x61810305:
-    strcpy(str, "ATSAME51G19A");
-    break;
+    case 0x61840001 : strcpy(str, "ATSAME54P19A");        break;
+    case 0x61840000 : strcpy(str, "ATSAME54P20A");        break;
+    case 0x61840003 : strcpy(str, "ATSAME54N19A");        break;
+    case 0x61840002 : strcpy(str, "ATSAME54N20A");        break;
+    case 0x61830002 : strcpy(str, "ATSAME53N20A");        break;
+    case 0x61830003 : strcpy(str, "ATSAME53N19A");        break;
+    case 0x61830006 : strcpy(str, "ATSAME53J18A");        break;
+    case 0x61830005 : strcpy(str, "ATSAME53J19A");        break;
+    case 0x61830004 : strcpy(str, "ATSAME53J20A");        break;
+    case 0x61810001 : strcpy(str, "ATSAME51N19A");        break;
+    case 0x61810000 : strcpy(str, "ATSAME51N20A");        break;
+    case 0x61810003 : strcpy(str, "ATSAME51J18A");        break;
+    case 0x61810002 : strcpy(str, "ATSAME51J19A");        break;
+    case 0x61810004 : strcpy(str, "ATSAME51J20A");        break;
+    case 0x60060000 : strcpy(str, "ATSAMD51P20A");        break;
+    case 0x60060001 : strcpy(str, "ATSAMD51P19A");        break;
+    case 0x60060003 : strcpy(str, "ATSAMD51N19A");        break;
+    case 0x60060002 : strcpy(str, "ATSAMD51N20A");        break;
+    case 0x60060006 : strcpy(str, "ATSAMD51J18A");        break;
+    case 0x60060005 : strcpy(str, "ATSAMD51J19A");        break;
+    case 0x60060004 : strcpy(str, "ATSAMD51J20A");        break;
+    case 0x60060008 : strcpy(str, "ATSAMD51G18A");        break;
+    case 0x60060007 : strcpy(str, "ATSAMD51G19A");        break;
+    case 0x61810306 : strcpy(str, "ATSAME51G18A");        break;
+    case 0x61810305 : strcpy(str, "ATSAME51G19A");        break;
   }
-#else
+ #else /* #ifdef __SAMD51__ */
+  switch (did & 0xfffff0ff)
+  {
+    case 0x10010000 : strcpy(str, "ATSAMD21J18A");        break;
+    case 0x10010001 : strcpy(str, "ATSAMD21J17A");        break;
+    case 0x10010002 : strcpy(str, "ATSAMD21J16A");        break;
+    case 0x10010003 : strcpy(str, "ATSAMD21J15A");        break;
+    //
+    case 0x10010005 : strcpy(str, "ATSAMD21G18A");        break;
+    case 0x10010006 : strcpy(str, "ATSAMD21G17A");        break;
+    case 0x10010007 : strcpy(str, "ATSAMD21G16A");        break;
+    case 0x10010008 : strcpy(str, "ATSAMD21G15A");        break;
+    //
+    case 0x1001000A : strcpy(str, "ATSAMD21E18A");        break;
+    case 0x1001000B : strcpy(str, "ATSAMD21E17A");        break;
+    case 0x1001000C : strcpy(str, "ATSAMD21E16A");        break;
+    case 0x1001000D : strcpy(str, "ATSAMD21E15A");        break;
+    //
+    case 0x1001000F : strcpy(str, "ATSAMD21G18A-WLCSP");  break;
+    case 0x10010010 : strcpy(str, "ATSAMD21G17A-WLCSP");  break;
+    //
+    case 0x10011420 : strcpy(str, "ATSAMD21J16B");        break;
+    case 0x10011421 : strcpy(str, "ATSAMD21J15B");        break;
+    //
+    case 0x10011423 : strcpy(str, "ATSAMD21G16B");        break;
+    case 0x10011424 : strcpy(str, "ATSAMD21G15B");        break;
+    //
+    case 0x10011426 : strcpy(str, "ATSAMD21E16B");        break;
+    case 0x10011427 : strcpy(str, "ATSAMD21E15B");        break;
+    //
+    case 0x10011055 : strcpy(str, "ATSAMD21E16B-WLCSP");  break;
+    case 0x10011056 : strcpy(str, "ATSAMD21E15B-WLCSP");  break;
+    //
+    case 0x10011062 : strcpy(str, "ATSAMD21E16C-WLCSP");  break;
+    case 0x10011063 : strcpy(str, "ATSAMD21G15C-WLCSP");  break;
+    default         : sprintf(str, "ATSDAM:%08lX",did);    break;
+  }
+ #endif /* #ifdef __SAMD51__ */
+#else /* #ifdef ARDUINO_ARCH_SAMD */
 #ifdef ARDUINO_ARCH_STM32
 #ifdef STM32F405xx
   strcpy(str, "STM32F405xx");

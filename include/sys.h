@@ -13,10 +13,19 @@
 
 #define ARRAY_LENGTH(x) (sizeof(x) / sizeof((x)[0]))
 
+#ifdef ARDUINO_ARCH_SAMD
+#if defined(__SAMD51__)
 #define UID_W0 ((unsigned int *)0x008061FCUL)
 #define UID_W1 ((unsigned int *)0x00806010UL)
 #define UID_W2 ((unsigned int *)0x00806014UL)
 #define UID_W3 ((unsigned int *)0x00806018UL)
+#else
+#define UID_W0 ((unsigned int *)0x0080A00CUL)
+#define UID_W1 ((unsigned int *)0x0080A040UL)
+#define UID_W2 ((unsigned int *)0x0080A044UL)
+#define UID_W3 ((unsigned int *)0x0080A048UL)
+#endif
+#endif
 
 #define ESC_CURSOR_ON "\x1b[?25h"
 #define ESC_CURSOR_OFF "\x1b[?25l"
