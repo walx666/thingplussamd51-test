@@ -154,25 +154,41 @@ int8_t delayMicrosWithStreamBreak(unsigned int us, Stream &mydev, char breakchr)
 char *GetUIDString(void)
 {
   static char str[33] = {0};
-  //sprintf(str, "%08X%08X%08X%08X", *UID_W0, *UID_W1, *UID_W2, *UID_W3);
+ #if defined(ARDUINO_ARCH_SAMD) && defined(UID_W0)
+  sprintf(str, "%08X%08X%08X%08X", *UID_W0, *UID_W1, *UID_W2, *UID_W3);
+ #endif
+ #if defined(ARDUINO_ARCH_STM32) && defined(STM32F4xx)
+  uint32_t CpuID[3];
+  CpuID[0] = ID_GetUnique32(0);
+  CpuID[1] = ID_GetUnique32(1);
+  CpuID[2] = ID_GetUnique32(2);
+  sprintf(str, "%08X%08X%08X", CpuID[0], CpuID[1], CpuID[2]);
+ #endif
   return str;
 }
 
-uint32_t *GetUIDtoArray(uint32_t *CpuID)
+uint32_t GetUIDtoArray(uint32_t *CpuID)
 {
- #ifdef UID_W0
+ #if defined(ARDUINO_ARCH_SAMD) && defined(UID_W0)
   CpuID[0] = *UID_W0;
   CpuID[1] = *UID_W1;
   CpuID[2] = *UID_W2;
   CpuID[3] = *UID_W3;
+  return (sizeof(uint32_t)*4);
  #endif
-  return CpuID;
+ #if defined(ARDUINO_ARCH_STM32) && defined(STM32F4xx)
+  CpuID[0] = ID_GetUnique32(0);
+  CpuID[1] = ID_GetUnique32(1);
+  CpuID[2] = ID_GetUnique32(2);
+  return (sizeof(uint32_t)*3);
+ #endif
+  return 0;
 }
 
 uint32_t *GetUID()
 {
   static uint32_t CpuID[4] = {0};
- #ifdef UID_W0
+ #if defined(ARDUINO_ARCH_SAMD) && defined(UID_W0)
   CpuID[0] = *UID_W0;
   CpuID[1] = *UID_W1;
   CpuID[2] = *UID_W2;
@@ -261,14 +277,15 @@ char *GetDeviceNameStringbyDID(void)
   }
  #endif /* #ifdef __SAMD51__ */
 #else /* #ifdef ARDUINO_ARCH_SAMD */
-#ifdef ARDUINO_ARCH_STM32
-#ifdef STM32F405xx
+ #ifdef ARDUINO_ARCH_STM32
+  #ifdef STM32F405xx
   strcpy(str, "STM32F405xx");
-#else
+ // IDCODE
+  #else
   strcpy(str, "STM32??????");
-#endif
-#else
-#endif
+  #endif
+ #else
+ #endif
 #endif
   return str;
 }

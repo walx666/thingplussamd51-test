@@ -55,13 +55,20 @@ uint8_t eepadr=EEPADR_A0;
  #if defined(ARDUINO_ARCH_STM32) && defined(ARDUINO_SPARKFUN_MICROMOD_F405)
 SPIClass SPIF(FLASH_SDI,FLASH_SDO,FLASH_SCK,FLASH_CS);
 //SPIClass SPIF(FLASH_SDO,FLASH_SDI,FLASH_SCK,FLASH_CS);
-#define FLASH_SPI       SPIF
+#define FLASH_SPI       SPI /* SPIF */
 #define PIN_FLASH_CS    FLASH_CS /* SS1 */
  #endif
- #if !defined(FLASH_SPI) || !defined(PIN_FLASH_CS)
-#error !!! Unsupportet Board !!! Please define FLASH_SPI and PIN_FLASH_CS
+ #if defined(ARDUINO_ARCH_STM32) && defined(_ARDUINO_NUCLEO_L432KC)
+#define FLASH_SPI       SPI
+#define PIN_FLASH_CS    PIN_SPI_SS /* SS1 */
  #endif
-
+//
+ #if !defined(FLASH_SPI) || !defined(PIN_FLASH_CS)
+#warning !!! Unsupportet Board !!! Please define FLASH_SPI and PIN_FLASH_CS
+#undef UseSPIFlash
+ #endif
+ #endif
+ #ifdef UseSPIFlash
 //void DetectSPIFlash (Stream & mydev = UsedSerial);
 void DetectSPIFlash (Stream & mydev, SPIClass spi);
  #endif
@@ -206,37 +213,21 @@ void loop() {
 }
 
 void ShowInfo (Stream & mydev, const char *prestr, const char *poststr) {
- #if 1
   if (prestr!=nullptr)
     mydev.print(prestr);
 
   prntf(mydev,"V" FWVERSION_EXT_STR "\t(%s",GetDeviceNameStringbyDID());
-  #if defined(ARDUINO_ARCH_SAMD)
+ #if defined(ARDUINO_ARCH_SAMD)
   prntf(mydev," Rev:%c",'A'+DSU->DID.bit.REVISION);
-   #if defined(UID_W0)
+ #endif
+ #if defined(ARDUINO_ARCH_SAMD) || defined (ARDUINO_ARCH_STM32)
   prntf(mydev," ID=%s",GetUIDString());
-   #endif
-  #endif
+ #endif
   prntf(mydev,")\r\n");
 
   if (poststr!=nullptr)
     mydev.print(poststr);
- #else
-  mydev.print("Info=\t\t");
-  mydev.print(GetDeviceNameStringbyDID());
-  #if defined(__SAMD51__)
-  mydev.print(" Rev:");
-  mydev.write('A'+DSU->DID.bit.REVISION);
-  #endif
-  mydev.println();
-  #if defined(UID_W0)
-  mydev.print("ID=\t\t");
-  mydev.print(GetUIDString());
-  #endif
-  mydev.println("\r\nFirmware =\tV" FWVERSION_EXT_STR);
- #endif
 }
-
 
  #ifdef UseSPIFlash
 void DetectSPIFlash (Stream & mydev, SPIClass spi)
