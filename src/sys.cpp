@@ -19,6 +19,21 @@ size_t prntf(Stream &SerUart, const char *fmt, ...)
   return size;
 }
 
+
+size_t prntfln(Stream &SerUart, const char *fmt, ...)
+{
+  size_t size;
+  char buf[256];
+  va_list args;
+  va_start(args, fmt);
+  size = vsnprintf(buf, 256, fmt, args);
+  va_end(args);
+  SerUart.print(buf);
+  size += SerUart.write("\r\n");
+  return size;
+}
+
+
 int timedPeek(Stream &s, uint32_t Timeout)
 {
   int c;
@@ -148,8 +163,31 @@ int8_t delayMicrosWithStreamBreak(unsigned int us, Stream &mydev, char breakchr)
       if (mydev.read() == breakchr)
         return -1;
   }
+}*/
+
+int8_t delayMillisWithStreamBreak(uint32_t ms, Stream &mydev, char breakchr)
+{
+  uint32_t start, elapsed;
+
+  if (ms == 0)
+    return 0;
+
+  start = millis();
+
+  while (1)
+  {
+    elapsed = millis() - start;
+    if (elapsed >= ms)
+      return 0;
+
+    if (ms > 10)
+      yield();
+
+    if (mydev.available())
+      if (mydev.read() == breakchr)
+        return -1;
+  }
 }
-*/
 
 char *GetUIDString(void)
 {

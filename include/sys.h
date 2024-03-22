@@ -119,8 +119,10 @@ struct NullStream : public Stream
 
 externSYS NullStream noStream;
 externSYS size_t prntf(Stream &SerUart, const char *fmt, ...);
+externSYS size_t prntfln(Stream &SerUart, const char *fmt, ...);
 externSYS double ScanDouble(Stream &s, double *defValue = nullptr, uint32_t TimeOut = SCANVALUE_TIMOUTMS_DEF, LookaheadMode lookahead = SKIP_ALL, char ignore = '\x01');
 externSYS int8_t delayMicrosWithStreamBreak(unsigned int us, Stream &mydev, char breakchr);
+externSYS int8_t delayMillisWithStreamBreak(uint32_t ms, Stream &mydev, char breakchr);
 // externSYS size_t printComplex(Print& p, Complex c, int digits);
 externSYS char *GetDeviceNameStringbyDID(void);
 externSYS char *GetUIDString(void);
