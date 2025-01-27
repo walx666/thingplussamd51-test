@@ -21,6 +21,7 @@ muTimer TimerSensor1 = muTimer();
 
 #ifdef UseEEPI2C
 #define EEPADDR_A0 0x50   //0b1010(A2 A1 A0): A standard I2C EEPROM with the ADR0 bit set to VCC
+#define EEPADDR_A8 0x53
 #define EEPADDR_AE 0x57
 #include "SparkFun_External_EEPROM.h" // Click here to get the library: http://librarymanager/All#SparkFun_External_EEPROM
 uint8_t eepaddr=EEPADDR_A0;
@@ -81,6 +82,7 @@ uint16_t FlashDeviceID=0;
 Adafruit_NeoPixel pixels(1, PIN_NEOPIXEL);
 #endif
 
+void mydelay(unsigned long ms);
 void loopHandleLED();
 //void ShowInfo (Stream & mydev = UsedSerial);
 void ShowInfo (Stream & mydev, const char *prestr=nullptr, const char *poststr=nullptr);
@@ -100,10 +102,8 @@ void setup() {
 
   UsedSerial.begin(115200);
   while(!UsedSerial) {
-    delay(50);
-    yield();
-  } 
-
+    mydelay(50);
+  }
   BlinkLED=true;
   ShowInfo(UsedSerial,"\r\n>BOOT!\t");
 
@@ -145,14 +145,30 @@ void BlinkDefaultLED(bool blink) {
 void loopHandleLED() {
   BlinkDefaultLED(BlinkLED);
 }
- #else
-void yield() {
-  BlinkDefaultLED(BlinkLED);
+void mydelay(unsigned long ms) {
+  if (ms)
+    delay(ms);
 }
+ #else
+void mydelay(unsigned long ms) {
+  if (ms)
+    delay(ms);
+  else
+    yield();
+ #ifndef UseScheduler
+  BlinkDefaultLED(BlinkLED);
+ #endif
+}
+/* void yield() {
+  BlinkDefaultLED(BlinkLED);
+} */
  #endif
 
 
 void loop() {
+ #ifndef UseScheduler
+  BlinkDefaultLED(BlinkLED);
+ #endif
  #ifdef UseSPIFlash
   if (FlashDeviceID==0) {
     FlashDeviceID = DetectSPIFlash(UsedSerial,FLASH_SPI);
@@ -170,8 +186,7 @@ void loop() {
     prntf(UsedSerial,"\r\nPress 'f' (detect FLASH)...");
  #endif
   while (UsedSerial.available()==0) {
-    delay(10);
-    yield();
+    mydelay(10);
   };
   
   if (UsedSerial.available()>0)
@@ -255,7 +270,7 @@ uint8_t DetectI2CEeprom (Stream & mydev, uint8_t *eepaddr, ExternalEEPROM *eep) 
     else
       mydev.write(".");
     
-    delay(500);
+    mydelay(500);
 
     test_eppaddr=EEPADDR_A0;
 
