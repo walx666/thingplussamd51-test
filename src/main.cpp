@@ -23,9 +23,21 @@ muTimer TimerSensor1 = muTimer();
 #define EEPADDR_A0 0x50   //0b1010(A2 A1 A0): A standard I2C EEPROM with the ADR0 bit set to VCC
 #define EEPADDR_A8 0x53
 #define EEPADDR_AE 0x57
+#define GETADR(MGADR, DEVADR) ((MGADR >> 16) | DEVADR)
+ #if defined(UseEEPI2C) && (UseEEPI2C == LIB)
 #include "SparkFun_External_EEPROM.h" // Click here to get the library: http://librarymanager/All#SparkFun_External_EEPROM
+ #else
+#include "External_EEPROM.h"
+ #endif
 uint8_t eepaddr=EEPADDR_A0;
 uint8_t DetectI2CEeprom (Stream & mydev, uint8_t *eepaddr, ExternalEEPROM *eep=nullptr);
+#include <SoftWire.h>
+SoftWire sw(SDA, SCL);
+// These buffers must be at least as large as the largest read or write you perform.
+char swTxBuffer[32];
+char swRxBuffer[32];
+
+uint8_t DetectI2CEepromSW (Stream & mydev, uint8_t *eepaddr, SoftWire *swire);
 #endif /* #ifdef UseEEPI2C */
 
 #define TWI_CLOCK_100KHZ  100000
@@ -176,14 +188,17 @@ void loop() {
  #endif
  #ifdef UseEEPI2C
   if (eepaddr) {
-    DetectI2CEeprom(UsedSerial,&eepaddr);
+    //DetectI2CEeprom(UsedSerial,&eepaddr);
   }
-  if (eepaddr)
-    prntf(UsedSerial,"\r\nPress 'e' (detect EEPOM)...");
+  prntf(UsedSerial,"\r\nPress:");
+  if (eepaddr) {
+    prntf(UsedSerial,"\t'ee' for EEPROM (sw)");
+    prntf(UsedSerial,"\t'E' for EEPROM (hw)");
+  }
  #endif
  #ifdef UseSPIFlash
-  if (eepaddr)
-    prntf(UsedSerial,"\r\nPress 'f' (detect FLASH)...");
+  //if (eepaddr)
+    prntf(UsedSerial,"\t'f' for FLASH");
  #endif
   while (UsedSerial.available()==0) {
     mydelay(10);
@@ -207,11 +222,17 @@ void loop() {
       //
       case 'f' : {
         FlashDeviceID=0;
-        prntfln(UsedSerial," ->'f'");
+        prntfln(UsedSerial," ->'%c'",rxdata);
+      } break;
+      case 'E' : {
+        eepaddr=EEPADDR_A0;
+        prntfln(UsedSerial," ->'%c'",rxdata);
+        DetectI2CEeprom(UsedSerial,&eepaddr);
       } break;
       case 'e' : {
         eepaddr=EEPADDR_A0;
-        prntfln(UsedSerial," ->'e'");
+        prntfln(UsedSerial," ->'%c'",rxdata);
+        DetectI2CEepromSW(UsedSerial,&eepaddr,&sw);
       } break;
       default: {
        #if 0
@@ -244,8 +265,159 @@ void ShowInfo (Stream & mydev, const char *prestr, const char *poststr) {
 
 
 #ifdef UseEEPI2C
+
+uint32_t detectMemorySizeNoWriteSW(SoftWire *swire,uint8_t i2cAddress)
+{
+  #define BUFSIZE (32)
+  uint8_t x, req=2;
+  uint32_t size=0;
+  swire->setTxBuffer(swTxBuffer, sizeof(swTxBuffer));
+  swire->setRxBuffer(swRxBuffer, sizeof(swRxBuffer));
+  swire->setDelay_us(5);
+  swire->setTimeout(1000);
+  //swire->setTimeout_ms(50);
+  swire->begin();
+  //  try to read a byte to see if connected
+  swire->beginTransmission(i2cAddress);
+  if (swire->endTransmission(1) != 0) {
+    swire->end();
+    // Serial.println(__LINE__);
+    return 0;
+  }
+  byte dataMatch[BUFSIZE];
+  //  Read from largest to smallest size
+ #if 1
+  for (size = 0x40000; size >= 32; size /= 2)
+  //for (size = 128; size < 0x40000; size *= 2)
+ #elif 0
+  size = 0x40000;
+ #elif 0
+  size = 0x20000;
+ #endif
+  {
+    //  Try to read last byte of the block, should return length of 0 when fails for single byte devices
+    //  Will return the same dataFirst as initially read on other devices 
+    //  as the data pointer could not be moved to the requested position
+    int8_t dec=1;
+   #if 0
+    while (dec>=0)
+   #endif
+   {
+    delay(2);
+    swire->beginTransmission((uint8_t)GETADR((size-dec), i2cAddress));
+    swire->write((uint8_t)(((size-dec) & 0xFFFF) >> 8));
+    swire->write((uint8_t)((size-dec) & 0xFF));
+    if (swire->endTransmission() != 0) {
+      //swire->end();
+      Serial.println(__LINE__);
+      return 0;
+    }
+   
+    x = swire->requestFrom((uint8_t)GETADR((size-dec), i2cAddress), req);
+    Serial.print("\r\nx=");
+    Serial.print(x,HEX);
+    Serial.println();
+
+    if (x == req) {
+      for (x=0; x < req;) {
+        if (swire->available())
+          dataMatch[x++] = swire->read();
+        else
+          break;
+      }
+    }
+    else {
+      swire->end();
+      Serial.println(__LINE__);
+      return 0;
+    }
+    dec--;
+   }
+   #ifdef DEBUG
+    Serial.print("@ 0x");
+    Serial.print(size,HEX);
+    //
+    Serial.print(" (-1,0)\tx=");
+    Serial.print(x,HEX);
+    Serial.print("/req=");
+    Serial.print(req,HEX);
+    //
+    Serial.print("\r\ndataMatch[");
+    Serial.print(BUFSIZE);
+    Serial.print("] =\t");
+    for (uint8_t pos = 0; pos < req; pos++) {
+        Serial.print(" ");
+        if (dataMatch[pos]<0x10)
+            Serial.print("0");
+        Serial.print(dataMatch[pos],HEX);
+    }
+    Serial.println("");
+   #endif
+    if (x == req) {
+      //  Read is performed just over size (size + BUFSIZE), 
+      //  this will only work for devices with mem > size;
+      //  therefore return size * 2
+      swire->end();
+      return size;
+    }
+  }
+  swire->end();
+  Serial.println(__LINE__);
+  return 0;
+}
+
+uint8_t DetectI2CEepromSW (Stream & mydev, uint8_t *eepaddr, SoftWire *swire) {
+  uint8_t detected_eepaddr=0, tries=0, test_eppaddr=EEPADDR_A0;
+  uint32_t eepromSizeBytes=0;
+  ExternalEEPROM myMem;
+
+  mydev.print("I2C-EEPROM(SW):\t");
+  while (tries++<20) {
+    while (test_eppaddr<=EEPADDR_AE) {
+      swire->beginTransmission(test_eppaddr);
+      if (swire->endTransmission(1) == 0) {
+        detected_eepaddr=test_eppaddr;
+        break;
+      }
+      test_eppaddr++;
+    }
+    
+    if (detected_eepaddr)
+      break;
+
+    if (tries<=1)
+      prntfln(mydev,"no memory detected");
+    else
+      mydev.write(".");
+    
+    mydelay(500);
+
+    test_eppaddr=EEPADDR_A0;
+
+    if (mydev.available()) {
+      if (mydev.read()) {
+        detected_eepaddr=0;
+        break;
+      }
+    }
+  }
+
+  //eep->setMemoryType(2048); // Valid types: 0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1025, 2048
+  if (detected_eepaddr) {
+    *eepaddr=detected_eepaddr;
+    //
+    eepromSizeBytes=detectMemorySizeNoWriteSW(swire,detected_eepaddr);
+    prntf(mydev,"detectMemorySizeNoWriteSW():\r\n");
+    prntf(mydev,"24XX%02d 0x%02X (%02X):\tsize: %d bytes / ", (eepromSizeBytes * 8 / 1024),detected_eepaddr, (detected_eepaddr<<1),eepromSizeBytes);
+  }
+
+  return(detected_eepaddr);
+}
+
+
 uint8_t DetectI2CEeprom (Stream & mydev, uint8_t *eepaddr, ExternalEEPROM *eep) {
   uint8_t detected_eepaddr=0, tries=0, test_eppaddr=EEPADDR_A0;
+  uint32_t eepromSizeBytes=0;
   ExternalEEPROM myMem;
 
   if (eep==nullptr) {
@@ -293,18 +465,28 @@ uint8_t DetectI2CEeprom (Stream & mydev, uint8_t *eepaddr, ExternalEEPROM *eep) 
     eep->setPageSize(0);
     eep->setPageSizeBytes(0);
     //
-    eep->detectAddressBytes();
+    eepromSizeBytes=eep->detectMemorySizeNoWrite();
+    prntf(mydev,"detectMemorySizeNoWrite():\r\n");
+    prntf(mydev,"24XX%02d 0x%02X (%02X):\tsize: %d bytes / ", (eepromSizeBytes * 8 / 1024),detected_eepaddr, (detected_eepaddr<<1),eepromSizeBytes);
+  #if 0
+    eep->setAddressBytes(0);
+    eep->setMemorySize(0);
+    eep->setMemorySizeBytes(0);
+    eep->setPageSize(0);
+    eep->setPageSizeBytes(0);
+    
+    //eep->detectAddressBytes();
     eep->detectPageSizeBytes();
-    eep->detectMemorySizeBytes();
-    uint32_t eepromSizeBytes = eep->getMemorySizeBytes();
-
+    //eep->detectMemorySizeBytes();
+    eepromSizeBytes = eep->getMemorySizeBytes();
     prntf(mydev,"24XX%02d @ %02X:\tsize: %d bytes / ", (eepromSizeBytes * 8 / 1024), (*eepaddr<<1),eepromSizeBytes);
    
     if (eepromSizeBytes < 128)
       prntf(mydev,"%02d Bits", eepromSizeBytes * 8);
     else
       prntf(mydev,"%02d kBits",(eepromSizeBytes * 8 / 1024));
-    prntf(mydev,"\tpageSize: %d",eep->detectPageSizeBytes());
+    prntf(mydev,"\tpageSize: %d",eep->getPageSize());
+   #endif
   }
 
   return(detected_eepaddr);

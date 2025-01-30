@@ -1,4 +1,6 @@
-#define UseEEPI2C
+#ifndef UseEEPI2C
+ #define UseEEPI2C
+#endif
 
 #define STRINGIFY_(x) #x
 #define STRINGIFY(x) STRINGIFY_(x)
